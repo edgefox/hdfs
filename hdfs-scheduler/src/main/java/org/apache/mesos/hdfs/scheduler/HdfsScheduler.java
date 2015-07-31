@@ -6,40 +6,20 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.mesos.MesosSchedulerDriver;
 import org.apache.mesos.Protos;
-import org.apache.mesos.Protos.CommandInfo;
-import org.apache.mesos.Protos.Environment;
-import org.apache.mesos.Protos.ExecutorID;
-import org.apache.mesos.Protos.ExecutorInfo;
-import org.apache.mesos.Protos.FrameworkID;
-import org.apache.mesos.Protos.FrameworkInfo;
-import org.apache.mesos.Protos.MasterInfo;
-import org.apache.mesos.Protos.Offer;
-import org.apache.mesos.Protos.OfferID;
-import org.apache.mesos.Protos.Resource;
-import org.apache.mesos.Protos.SlaveID;
-import org.apache.mesos.Protos.TaskID;
-import org.apache.mesos.Protos.TaskInfo;
-import org.apache.mesos.Protos.TaskState;
-import org.apache.mesos.Protos.TaskStatus;
-import org.apache.mesos.Protos.Value;
+import org.apache.mesos.Protos.*;
 import org.apache.mesos.SchedulerDriver;
+import org.apache.mesos.hdfs.backup.FsEventsAccumulator;
 import org.apache.mesos.hdfs.config.HdfsFrameworkConfig;
 import org.apache.mesos.hdfs.state.AcquisitionPhase;
+import org.apache.mesos.hdfs.state.IPersistentStateStore;
 import org.apache.mesos.hdfs.state.LiveState;
 import org.apache.mesos.hdfs.state.PersistenceException;
-import org.apache.mesos.hdfs.state.IPersistentStateStore;
 import org.apache.mesos.hdfs.util.DnsResolver;
 import org.apache.mesos.hdfs.util.HDFSConstants;
 
+import java.io.IOException;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
 
 /**
  * HDFS Mesos Framework Scheduler class implementation.
@@ -54,15 +34,17 @@ public class HdfsScheduler implements org.apache.mesos.Scheduler, Runnable {
   private final LiveState liveState;
   private final IPersistentStateStore persistenceStore;
   private final DnsResolver dnsResolver;
+  private final FsEventsAccumulator fsEventsAccumulator;
 
   @Inject
   public HdfsScheduler(HdfsFrameworkConfig hdfsFrameworkConfig,
-    LiveState liveState, IPersistentStateStore persistenceStore) {
+    LiveState liveState, IPersistentStateStore persistenceStore) throws IOException {
 
     this.hdfsFrameworkConfig = hdfsFrameworkConfig;
     this.liveState = liveState;
     this.persistenceStore = persistenceStore;
     this.dnsResolver = new DnsResolver(this, hdfsFrameworkConfig);
+    this.fsEventsAccumulator = new FsEventsAccumulator(hdfsFrameworkConfig);
   }
 
   @Override
@@ -79,14 +61,14 @@ public class HdfsScheduler implements org.apache.mesos.Scheduler, Runnable {
   public void executorLost(SchedulerDriver driver, ExecutorID executorID, SlaveID slaveID,
     int status) {
     log.info("Executor lost: executorId=" + executorID.getValue() + " slaveId="
-      + slaveID.getValue() + " status=" + status);
+            + slaveID.getValue() + " status=" + status);
   }
 
   @Override
   public void frameworkMessage(SchedulerDriver driver, ExecutorID executorID, SlaveID slaveID,
     byte[] data) {
     log.info("Framework message: executorId=" + executorID.getValue() + " slaveId="
-      + slaveID.getValue() + " data='" + Arrays.toString(data) + "'");
+            + slaveID.getValue() + " data='" + Arrays.toString(data) + "'");
   }
 
   @Override
@@ -221,6 +203,7 @@ public class HdfsScheduler implements org.apache.mesos.Scheduler, Runnable {
             break;
           case START_NAME_NODES:
             if (journalNodesResolvable && tryToLaunchNameNode(driver, offer)) {
+              fsEventsAccumulator.start();
               acceptedOffer = true;
             } else {
               driver.declineOffer(offer.getId());
@@ -233,7 +216,11 @@ public class HdfsScheduler implements org.apache.mesos.Scheduler, Runnable {
             if (tryToLaunchDataNode(driver, offer)) {
               acceptedOffer = true;
             } else {
-              driver.declineOffer(offer.getId());
+              if (fsEventsAccumulator.hasPendingEvents()) {
+                acceptedOffer = true;
+              } else {
+                driver.declineOffer(offer.getId());
+              }
             }
             break;
         }

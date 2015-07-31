@@ -35,12 +35,14 @@ subprojects {
 
   ext {
     mesosVer = "0.22.1"
-    hadoopVer = "2.5.0"
+    hadoopVersion = "2.7.1"
     slf4jVer = "1.7.10"
     logbackVer = "1.1.2"
     guiceVer = "3.0"
     junitVer = "4.11"
     mockitoVer = "1.9.5"
+    commonsVersion = "3.1"
+    kryoVersion = "3.0.3"
   }
 
   repositories {
@@ -55,8 +57,12 @@ subprojects {
     compile "org.slf4j:log4j-over-slf4j:${slf4jVer}"
     compile "org.slf4j:jcl-over-slf4j:${slf4jVer}"
     compile "ch.qos.logback:logback-classic:${logbackVer}"
+    compile "org.apache.commons:commons-lang3:${commonsVersion}"
+    compile "com.esotericsoftware:kryo:${kryoVersion}"
+    compile "org.apache.hadoop:hadoop-client:${hadoopVersion}"
+    compile "org.apache.hadoop:hadoop-hdfs:${hadoopVersion}"
 
-    compile("org.apache.hadoop:hadoop-common:${hadoopVer}") {
+    compile("org.apache.hadoop:hadoop-common:${hadoopVersion}") {
       exclude group: "log4j", module: "log4j"
       exclude group: "org.slf4j", module: "slf4j-log4j12"
       exclude group: "javax.servlet", module: "servlet-api"
