@@ -59,8 +59,14 @@ subprojects {
     compile "ch.qos.logback:logback-classic:${logbackVer}"
     compile "org.apache.commons:commons-lang3:${commonsVersion}"
     compile "com.esotericsoftware:kryo:${kryoVersion}"
-    compile "org.apache.hadoop:hadoop-client:${hadoopVersion}"
-    compile "org.apache.hadoop:hadoop-hdfs:${hadoopVersion}"
+    compile ("org.apache.hadoop:hadoop-client:${hadoopVersion}") {
+      exclude group: "log4j", module: "log4j"
+      exclude group: "org.slf4j", module: "slf4j-log4j12"
+    }
+    compile("org.apache.hadoop:hadoop-hdfs:${hadoopVersion}") {
+      exclude group: "log4j", module: "log4j"
+      exclude group: "org.slf4j", module: "slf4j-log4j12"
+    }
 
     compile("org.apache.hadoop:hadoop-common:${hadoopVersion}") {
       exclude group: "log4j", module: "log4j"
