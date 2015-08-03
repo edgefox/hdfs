@@ -18,6 +18,7 @@ import org.apache.mesos.ExecutorDriver;
 import org.apache.mesos.MesosExecutorDriver;
 import org.apache.mesos.Protos;
 import org.apache.mesos.hdfs.config.HdfsFrameworkConfig;
+import org.apache.mesos.hdfs.util.HDFSConstants;
 import org.apache.mesos.hdfs.util.Trie;
 
 import java.io.IOException;
@@ -27,13 +28,12 @@ import java.util.List;
 
 public class BackupExecutor implements Executor {
     private static final Log log = LogFactory.getLog(BackupExecutor.class);
-    private Protos.ExecutorInfo executorInfo;
-    private Task task;
 
     private final HdfsFrameworkConfig hdfsFrameworkConfig;
     private final Kryo kryo;
     private final FileSystem srcDfs;
     private final FileSystem dstDfs;
+    private boolean stopped;
 
     /**
      * The constructor for the node which saves the configuration.
@@ -43,7 +43,7 @@ public class BackupExecutor implements Executor {
         this.hdfsFrameworkConfig = hdfsFrameworkConfig;
         this.kryo = new Kryo();
         this.srcDfs = FileSystem.get(URI.create(String.format("hdfs://%s", hdfsFrameworkConfig.getFrameworkName())), new Configuration());
-        this.dstDfs = FileSystem.get(URI.create(String.format("hdfs://%s", hdfsFrameworkConfig.getFrameworkName())), new Configuration());
+        this.dstDfs = FileSystem.get(URI.create(hdfsFrameworkConfig.getBackupDestination()), new Configuration());
     }
 
     public static void main(String[] args) {
@@ -71,6 +71,9 @@ public class BackupExecutor implements Executor {
     @Override
     @SuppressWarnings("unchecked")
     public void launchTask(ExecutorDriver driver, Protos.TaskInfo task) {
+        driver.sendStatusUpdate(Protos.TaskStatus.newBuilder()
+                .setExecutorId(Protos.ExecutorID.newBuilder().setValue(HDFSConstants.BACKUP_EXECUTOR_ID))
+                .setState(Protos.TaskState.TASK_RUNNING).build());
         final Input input = new Input(task.getData().newInput());
         Trie<String, Event> fsEventTree = (Trie<String, Event>)kryo.readObject(input, Trie.class);
         try {
@@ -79,21 +82,29 @@ public class BackupExecutor implements Executor {
             //TODO: what to do next?
             e.printStackTrace();
         }
+        driver.sendStatusUpdate(Protos.TaskStatus.newBuilder()
+                .setExecutorId(Protos.ExecutorID.newBuilder().setValue(HDFSConstants.BACKUP_EXECUTOR_ID))
+                .setState(Protos.TaskState.TASK_FINISHED).build());
     }
 
     @Override
     public void killTask(ExecutorDriver driver, Protos.TaskID taskId) {
-
+        log.info("Kill signal from master");
+        stopped = true;
     }
 
     @Override
     public void frameworkMessage(ExecutorDriver driver, byte[] data) {
-
+        log.info(String.format("Message from master: %s", String.valueOf(data)));
     }
 
     @Override
     public void shutdown(ExecutorDriver driver) {
-
+        log.info("Shutting down the framework");
+        stopped = true;
+        driver.sendStatusUpdate(Protos.TaskStatus.newBuilder()
+                .setExecutorId(Protos.ExecutorID.newBuilder().setValue(HDFSConstants.BACKUP_EXECUTOR_ID))
+                .setState(Protos.TaskState.TASK_FINISHED).build());
     }
 
     @Override
@@ -103,14 +114,20 @@ public class BackupExecutor implements Executor {
 
     private void processChanges(Trie<String, Event> fsTree) throws IOException {
         final List<Path> pathsToDelete = processNonDeleteChanges(fsTree);
-        for (Path deletePath : pathsToDelete) {
-            dstDfs.delete(deletePath, true);
+        if (!stopped) {
+            for (Path deletePath : pathsToDelete) {
+                dstDfs.delete(deletePath, true);
+            }
         }
     }
 
     private List<Path> processNonDeleteChanges(Trie<String, Event> fsTree) throws IOException {
         List<Path> pathsToDelete = new ArrayList<>();
         for (Trie<String, Event> entry : fsTree.getChildren().values()) {
+            if (stopped) {
+                return pathsToDelete;
+            }
+
             final Event event = entry.getModel();
             if (event == null) {
                 continue;

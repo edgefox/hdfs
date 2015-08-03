@@ -23,12 +23,14 @@ public class HdfsFrameworkConfig {
   private static final int DEFAULT_EXECUTOR_HEAP_SIZE = 256;
   private static final int DEFAULT_DATANODE_HEAP_SIZE = 1024;
   private static final int DEFAULT_NAMENODE_HEAP_SIZE = 4096;
+  private static final int DEFAULT_BACKUP_HEAP_SIZE = 2048;
 
   private static final double DEFAULT_CPUS = 0.5;
   private static final double DEFAULT_EXECUTOR_CPUS = DEFAULT_CPUS;
   private static final double DEFAULT_NAMENODE_CPUS = 1;
   private static final double DEFAULT_JOURNAL_CPUS = 1;
   private static final double DEFAULT_DATANODE_CPUS = 1;
+  private static final double DEFAULT_BACKUP_CPUS = 1;
 
   private static final double DEFAULT_JVM_OVERHEAD = 1.35;
   private static final int DEFAULT_JOURNAL_NODE_COUNT = 3;
@@ -105,6 +107,10 @@ public class HdfsFrameworkConfig {
     return getHadoopHeapSize();
   }
 
+  public int getBackupHeapSize() {
+    return getConf().getInt("mesos.hdfs.backup.heap.size", DEFAULT_BACKUP_HEAP_SIZE);
+  }
+
   public int getTaskHeapSize(String taskName) {
     int size;
     switch (taskName) {
@@ -120,6 +126,9 @@ public class HdfsFrameworkConfig {
       case "journalnode":
         size = getJournalNodeHeapSize();
         break;
+      case "backup":
+        size = getBackupHeapSize();
+        break;
       default:
         final String msg = "Invalid request for heapsize for taskName = " + taskName;
         log.error(msg);
@@ -134,18 +143,18 @@ public class HdfsFrameworkConfig {
 
   public String getJvmOpts() {
     return getConf().get(
-      "mesos.hdfs.jvm.opts", ""
-        + "-XX:+UseConcMarkSweepGC "
-        + "-XX:+CMSClassUnloadingEnabled "
-        + "-XX:+UseTLAB "
-        + "-XX:+AggressiveOpts "
-        + "-XX:+UseCompressedOops "
-        + "-XX:+UseFastEmptyMethods "
-        + "-XX:+UseFastAccessorMethods "
-        + "-Xss256k "
-        + "-XX:+AlwaysPreTouch "
-        + "-XX:+UseParNewGC "
-        + "-Djava.library.path=/usr/lib:/usr/local/lib:lib/native");
+            "mesos.hdfs.jvm.opts", ""
+                    + "-XX:+UseConcMarkSweepGC "
+                    + "-XX:+CMSClassUnloadingEnabled "
+                    + "-XX:+UseTLAB "
+                    + "-XX:+AggressiveOpts "
+                    + "-XX:+UseCompressedOops "
+                    + "-XX:+UseFastEmptyMethods "
+                    + "-XX:+UseFastAccessorMethods "
+                    + "-Xss256k "
+                    + "-XX:+AlwaysPreTouch "
+                    + "-XX:+UseParNewGC "
+                    + "-Djava.library.path=/usr/lib:/usr/local/lib:lib/native");
   }
 
   public double getExecutorCpus() {
@@ -168,6 +177,10 @@ public class HdfsFrameworkConfig {
     return getConf().getDouble("mesos.hdfs.datanode.cpus", DEFAULT_DATANODE_CPUS);
   }
 
+  public double getBackupNodeCpus() {
+    return getConf().getDouble("mesos.hdfs.backup.cpus", DEFAULT_BACKUP_CPUS);
+  }
+
   public double getTaskCpus(String taskName) {
     double cpus = DEFAULT_CPUS;
     switch (taskName) {
@@ -182,6 +195,9 @@ public class HdfsFrameworkConfig {
         break;
       case "journalnode":
         cpus = getJournalNodeCpus();
+        break;
+      case "backup":
+        cpus = getBackupNodeCpus();
         break;
       default:
         final String msg = "Invalid request for CPUs for taskName= " + taskName;
@@ -285,5 +301,13 @@ public class HdfsFrameworkConfig {
 
   public String getJreVersion() {
     return getConf().get("mesos.hdfs.jre-version", "jre1.7.0_76");
+  }
+
+  public boolean isBackupEnabled() {
+    return getConf().getBoolean("mesos.hdfs.backup.enabled", false);
+  }
+
+  public String getBackupDestination() {
+    return getConf().get("mesos.hdfs.backup.destination", "");
   }
 }

@@ -33,6 +33,7 @@ public class FsEventsAccumulator implements Runnable {
     private final ZkClient zkClient;
     private long lastCommittedTxId;
     private volatile long lastTxId;
+    private boolean isStarted;
 
     private final ScheduledExecutorService backupExecutor;
     private final Kryo kryo = new Kryo();
@@ -54,9 +55,14 @@ public class FsEventsAccumulator implements Runnable {
 
     public void start() {
         backupExecutor.execute(this);
+        isStarted = true;
     }
 
-    public synchronized byte[] flushFSEventsSerialized() {
+    public boolean isStarted() {
+        return isStarted;
+    }
+
+    public synchronized byte[] flush() {
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         final Output output = new Output(baos);
         kryo.writeObject(output, fsEventTree);

@@ -35,6 +35,7 @@ public class HdfsScheduler implements org.apache.mesos.Scheduler, Runnable {
   private final IPersistentStateStore persistenceStore;
   private final DnsResolver dnsResolver;
   private final FsEventsAccumulator fsEventsAccumulator;
+  private volatile boolean backupInProgress;
 
   @Inject
   public HdfsScheduler(HdfsFrameworkConfig hdfsFrameworkConfig,
@@ -101,11 +102,15 @@ public class HdfsScheduler implements org.apache.mesos.Scheduler, Runnable {
   @Override
   public void statusUpdate(SchedulerDriver driver, TaskStatus status) {
     log.info(String.format(
-      "Received status update for taskId=%s state=%s message='%s' stagingTasks.size=%d",
-      status.getTaskId().getValue(),
-      status.getState().toString(),
-      status.getMessage(),
-      liveState.getStagingTasksSize()));
+            "Received status update for taskId=%s state=%s message='%s' stagingTasks.size=%d",
+            status.getTaskId().getValue(),
+            status.getState().toString(),
+            status.getMessage(),
+            liveState.getStagingTasksSize()));
+
+    if (status.getExecutorId().getValue().equals(HDFSConstants.BACKUP_EXECUTOR_ID) && isTerminalState(status)) {
+      return;
+    }
 
     if (!isStagingState(status)) {
       liveState.removeStagingTask(status.getTaskId());
@@ -203,7 +208,6 @@ public class HdfsScheduler implements org.apache.mesos.Scheduler, Runnable {
             break;
           case START_NAME_NODES:
             if (journalNodesResolvable && tryToLaunchNameNode(driver, offer)) {
-              fsEventsAccumulator.start();
               acceptedOffer = true;
             } else {
               driver.declineOffer(offer.getId());
@@ -214,10 +218,15 @@ public class HdfsScheduler implements org.apache.mesos.Scheduler, Runnable {
             break;
           case DATA_NODES:
             if (tryToLaunchDataNode(driver, offer)) {
+              if (hdfsFrameworkConfig.isBackupEnabled() && !fsEventsAccumulator.isStarted()) {
+                fsEventsAccumulator.start();
+              }
               acceptedOffer = true;
             } else {
-              if (fsEventsAccumulator.hasPendingEvents()) {
-                acceptedOffer = true;
+              if (fsEventsAccumulator.isStarted() && fsEventsAccumulator.hasPendingEvents()) {
+                if (launchBackup(driver, offer)) {
+                  acceptedOffer = true;
+                }
               } else {
                 driver.declineOffer(offer.getId());
               }
@@ -292,6 +301,37 @@ public class HdfsScheduler implements org.apache.mesos.Scheduler, Runnable {
       persistenceStore.addHdfsNode(taskId, offer.getHostname(), taskType, taskName);
     }
     driver.launchTasks(Arrays.asList(offer.getId()), tasks);
+    return true;
+  }
+
+  private boolean launchBackup(SchedulerDriver driver, Offer offer) {
+    if (backupInProgress) {
+      return false;
+    }
+
+    log.info("Launching backup task");
+    final String taskType = HDFSConstants.BACKUP_NODE_ID;
+    final String executorName = HDFSConstants.BACKUP_EXECUTOR_ID;
+
+    String taskIdName = String.format("%s.%s.%d", taskType, executorName, System.currentTimeMillis());
+    List<Resource> resources = getExecutorResources();
+    ExecutorInfo executorInfo = createExecutor(taskIdName, taskType, executorName, resources);
+    List<Resource> taskResources = getTaskResources(taskType);
+    TaskID taskId = TaskID.newBuilder()
+             .setValue(String.format("task.%s.%s", HDFSConstants.BACKUP_TASKID, taskIdName))
+              .build();
+      TaskInfo task = TaskInfo.newBuilder()
+              .setExecutor(executorInfo)
+              .setName(HDFSConstants.BACKUP_NODE_ID)
+              .setTaskId(taskId)
+              .setSlaveId(offer.getSlaveId())
+              .addAllResources(taskResources)
+              .setData(ByteString.copyFrom(fsEventsAccumulator.flush()))
+              .build();
+
+    driver.launchTasks(Arrays.asList(offer.getId()), Arrays.asList(task));
+    backupInProgress = true;
+
     return true;
   }
 

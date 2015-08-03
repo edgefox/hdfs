@@ -89,4 +89,17 @@
     <name>mesos.hdfs.ld-library-path</name>
     <value>/opt/mesosphere/lib</value>
   </property>
+
+  <property>
+    <name>mesos.hdfs.backup.enabled</name>
+    <description>Backup enabled or disabled</description>
+    <value>false</value>
+  </property>
+
+  <property>
+    <name>mesos.hdfs.backup.destination</name>
+    <description>Destination HDFS from backup</description>
+    <value></value>
+  </property>
+
 </configuration>

@@ -19,13 +19,18 @@ public final class HDFSConstants {
   public static final String JOURNAL_NODE_ID = "journalnode";
   public static final String DATA_NODE_ID = "datanode";
   public static final String ZKFC_NODE_ID = "zkfc";
+  public static final String BACKUP_NODE_ID = "backup";
 
   // NameNode TaskId
   public static final String NAME_NODE_TASKID = ".namenode.namenode.";
 
+  // Backup TaskId
+  public static final String BACKUP_TASKID = ".backup.";
+
   // ExecutorsIds
   public static final String NODE_EXECUTOR_ID = "NodeExecutor";
   public static final String NAME_NODE_EXECUTOR_ID = "NameNodeExecutor";
+  public static final String BACKUP_EXECUTOR_ID = "BackupExecutor";
 
   // Path to Store HDFS Binary
   public static final String HDFS_BINARY_DIR = "hdfs";
