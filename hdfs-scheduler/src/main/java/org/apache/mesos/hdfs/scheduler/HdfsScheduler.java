@@ -109,6 +109,7 @@ public class HdfsScheduler implements org.apache.mesos.Scheduler, Runnable {
             liveState.getStagingTasksSize()));
 
     if (status.getExecutorId().getValue().equals(HDFSConstants.BACKUP_EXECUTOR_ID) && isTerminalState(status)) {
+      backupInProgress = false;
       return;
     }
 
