@@ -108,16 +108,14 @@ public class HdfsScheduler implements org.apache.mesos.Scheduler, Runnable {
             status.getMessage(),
             liveState.getStagingTasksSize()));
 
-    if (status.getExecutorId().getValue().equals(HDFSConstants.BACKUP_EXECUTOR_ID) && isTerminalState(status)) {
-      backupInProgress = false;
-      return;
-    }
-
     if (!isStagingState(status)) {
       liveState.removeStagingTask(status.getTaskId());
     }
 
     if (isTerminalState(status)) {
+      if (status.getExecutorId().getValue().equals(HDFSConstants.BACKUP_EXECUTOR_ID)) {
+        backupInProgress = false;
+      }
       liveState.removeRunningTask(status.getTaskId());
       persistenceStore.removeTaskId(status.getTaskId().getValue());
       // Correct the phase when a task dies after the reconcile period is over
@@ -330,6 +328,7 @@ public class HdfsScheduler implements org.apache.mesos.Scheduler, Runnable {
               .setData(ByteString.copyFrom(fsEventsAccumulator.flush()))
               .build();
 
+    liveState.addStagingTask(task.getTaskId());
     driver.launchTasks(Arrays.asList(offer.getId()), Arrays.asList(task));
     backupInProgress = true;
 

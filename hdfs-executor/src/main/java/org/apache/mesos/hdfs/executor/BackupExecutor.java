@@ -72,25 +72,34 @@ public class BackupExecutor implements Executor {
     @SuppressWarnings("unchecked")
     public void launchTask(ExecutorDriver driver, Protos.TaskInfo task) {
         driver.sendStatusUpdate(Protos.TaskStatus.newBuilder()
+                .setTaskId(task.getTaskId())
                 .setExecutorId(Protos.ExecutorID.newBuilder().setValue(HDFSConstants.BACKUP_EXECUTOR_ID))
                 .setState(Protos.TaskState.TASK_RUNNING).build());
         final Input input = new Input(task.getData().newInput());
         Trie<String, Event> fsEventTree = (Trie<String, Event>)kryo.readObject(input, Trie.class);
+
+        Protos.TaskState taskState;
         try {
             processChanges(fsEventTree);
+            taskState = Protos.TaskState.TASK_FINISHED;
         } catch (IOException e) {
-            //TODO: what to do next?
-            e.printStackTrace();
+            taskState = Protos.TaskState.TASK_FAILED;
         }
         driver.sendStatusUpdate(Protos.TaskStatus.newBuilder()
+                .setTaskId(task.getTaskId())
                 .setExecutorId(Protos.ExecutorID.newBuilder().setValue(HDFSConstants.BACKUP_EXECUTOR_ID))
-                .setState(Protos.TaskState.TASK_FINISHED).build());
+                .setState(taskState).build());
     }
 
     @Override
     public void killTask(ExecutorDriver driver, Protos.TaskID taskId) {
         log.info("Kill signal from master");
         stopped = true;
+        driver.sendStatusUpdate(Protos.TaskStatus.newBuilder()
+                .setExecutorId(Protos.ExecutorID.newBuilder().setValue(HDFSConstants.BACKUP_EXECUTOR_ID))
+                .setTaskId(taskId)
+                .setState(Protos.TaskState.TASK_KILLED)
+                .build());
     }
 
     @Override
