@@ -16,24 +16,15 @@ import java.util.Map;
 public class Trie<K, M> implements Serializable, Cloneable {
     private K key;
     private M model;
-    private Trie<K, M> parent;
     private Map<K, Trie<K, M>> children;
 
     public Trie() {
-        this(null, null, null);
+        this(null, null);
     }
 
     public Trie(K key, M model) {
         this.key = key;
         this.model = model;
-        this.parent = null;
-        this.children = new HashMap<>();
-    }
-
-    public Trie(K key, M model, Trie<K, M> parent) {
-        this.key = key;
-        this.model = model;
-        this.parent = parent;
         this.children = new HashMap<>();
     }
 
@@ -53,10 +44,6 @@ public class Trie<K, M> implements Serializable, Cloneable {
         this.model = model;
     }
 
-    public Trie<K, M> getParent() {
-        return parent;
-    }
-
     public Map<K, Trie<K, M>> getChildren() {
         return children;
     }
@@ -65,21 +52,11 @@ public class Trie<K, M> implements Serializable, Cloneable {
         children.clear();
     }
 
-    protected Trie<K, M> detachFromParent() {
-        Trie<K, M> oldParent = parent;
-        if (parent != null) {
-            this.parent.removeChild(this.getKey());
-            this.parent = null;
-        }
-        return oldParent;
-    }
-
     public Trie<K, M> getChild(K key) {
         return children.get(key);
     }
 
     public Trie<K, M> addChild(Trie<K, M> node) {
-        node.parent = this;
         if (children.containsKey(key)) {
             children.get(node.getKey()).setModel(node.getModel());
             node = children.get(node.getKey());

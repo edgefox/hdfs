@@ -8,7 +8,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DFSInotifyEventInputStream;
 import org.apache.hadoop.hdfs.client.HdfsAdmin;
-import org.apache.hadoop.hdfs.inotify.Event;
+import org.apache.hadoop.hdfs.inotify.Event.EventType;
 import org.apache.hadoop.hdfs.inotify.EventBatch;
 import org.apache.hadoop.hdfs.inotify.MissingEventsException;
 import org.apache.mesos.hdfs.config.HdfsFrameworkConfig;
@@ -96,47 +96,53 @@ public class FsEventsAccumulator implements Runnable {
             while (!Thread.currentThread().isInterrupted()) {
                 eventBatch = eventStream.take();
                 lastTxId = eventBatch.getTxid();
-                for (Event event : eventBatch.getEvents()) {
+                for (org.apache.hadoop.hdfs.inotify.Event event : eventBatch.getEvents()) {
                     switch (event.getEventType()) {
                         case APPEND: {
-                            Event.AppendEvent actualEvent = ((Event.AppendEvent) event);
+                            org.apache.hadoop.hdfs.inotify.Event.AppendEvent actualEvent =
+                                (org.apache.hadoop.hdfs.inotify.Event.AppendEvent) event;
                             final Path changedPath = Paths.get(actualEvent.getPath());
-                            handleEvent(changedPath, actualEvent);
+                            handleEvent(changedPath, new Event.AppendEvent(actualEvent));
 
                             break;
                         }
                         case CLOSE: {
-                            Event.CloseEvent actualEvent = ((Event.CloseEvent) event);
+                            org.apache.hadoop.hdfs.inotify.Event.CloseEvent actualEvent =
+                                (org.apache.hadoop.hdfs.inotify.Event.CloseEvent) event;
                             final Path changedPath = Paths.get(actualEvent.getPath());
-                            handleEvent(changedPath, actualEvent);
+                            handleEvent(changedPath, new Event.CloseEvent(actualEvent));
 
                             break;
                         }
                         case CREATE: {
-                            Event.CreateEvent actualEvent = ((Event.CreateEvent) event);
+                            org.apache.hadoop.hdfs.inotify.Event.CreateEvent actualEvent =
+                                (org.apache.hadoop.hdfs.inotify.Event.CreateEvent) event;
                             final Path changedPath = Paths.get(actualEvent.getPath());
-                            handleEvent(changedPath, actualEvent);
+                            handleEvent(changedPath, new Event.CreateEvent(actualEvent));
 
                             break;
                         }
                         case METADATA: {
-                            Event.MetadataUpdateEvent actualEvent = ((Event.MetadataUpdateEvent) event);
+                            org.apache.hadoop.hdfs.inotify.Event.MetadataUpdateEvent actualEvent =
+                                (org.apache.hadoop.hdfs.inotify.Event.MetadataUpdateEvent) event;
                             final Path changedPath = Paths.get(actualEvent.getPath());
-                            handleEvent(changedPath, actualEvent);
+                            handleEvent(changedPath, new Event.MetadataUpdateEvent(actualEvent));
 
                             break;
                         }
                         case RENAME: {
-                            Event.RenameEvent actualEvent = ((Event.RenameEvent) event);
+                            org.apache.hadoop.hdfs.inotify.Event.RenameEvent actualEvent =
+                                (org.apache.hadoop.hdfs.inotify.Event.RenameEvent)  event;
                             final Path to = Paths.get(actualEvent.getDstPath());
-                            handleEvent(to, actualEvent);
+                            handleEvent(to, new Event.RenameEvent(actualEvent));
 
                             break;
                         }
                         case UNLINK: {
-                            Event.UnlinkEvent actualEvent = ((Event.UnlinkEvent) event);
+                            org.apache.hadoop.hdfs.inotify.Event.UnlinkEvent actualEvent =
+                                (org.apache.hadoop.hdfs.inotify.Event.UnlinkEvent) event;
                             final Path changedPath = Paths.get(actualEvent.getPath());
-                            handleEvent(changedPath, actualEvent);
+                            handleEvent(changedPath, new Event.UnlinkEvent(actualEvent));
 
                             break;
                         }
@@ -161,7 +167,7 @@ public class FsEventsAccumulator implements Runnable {
             } else {
                 Trie<String, Event> child = new Trie<>(key, event);
                 current = current.addChild(child);
-                if (event.getEventType() == Event.EventType.UNLINK) {
+                if (event.getEventType() == EventType.UNLINK) {
                     current.removeChildren();
                 }
             }

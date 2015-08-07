@@ -12,11 +12,12 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.XAttr;
-import org.apache.hadoop.hdfs.inotify.Event;
+import org.apache.hadoop.hdfs.inotify.Event.CreateEvent.INodeType;
 import org.apache.mesos.Executor;
 import org.apache.mesos.ExecutorDriver;
 import org.apache.mesos.MesosExecutorDriver;
 import org.apache.mesos.Protos;
+import org.apache.mesos.hdfs.backup.Event;
 import org.apache.mesos.hdfs.config.HdfsFrameworkConfig;
 import org.apache.mesos.hdfs.util.HDFSConstants;
 import org.apache.mesos.hdfs.util.Trie;
@@ -42,8 +43,11 @@ public class BackupExecutor implements Executor {
     BackupExecutor(HdfsFrameworkConfig hdfsFrameworkConfig) throws IOException {
         this.hdfsFrameworkConfig = hdfsFrameworkConfig;
         this.kryo = new Kryo();
-        this.srcDfs = FileSystem.get(URI.create(String.format("hdfs://%s", hdfsFrameworkConfig.getFrameworkName())), new Configuration());
-        this.dstDfs = FileSystem.get(URI.create(hdfsFrameworkConfig.getBackupDestination()), new Configuration());
+        this.srcDfs = FileSystem.get(
+            URI.create(String.format("hdfs://%s", hdfsFrameworkConfig.getFrameworkName())),
+            new Configuration());
+        this.dstDfs = FileSystem.get(URI.create(hdfsFrameworkConfig.getBackupDestination()),
+            new Configuration());
     }
 
     public static void main(String[] args) {
@@ -73,7 +77,8 @@ public class BackupExecutor implements Executor {
     public void launchTask(ExecutorDriver driver, Protos.TaskInfo task) {
         driver.sendStatusUpdate(Protos.TaskStatus.newBuilder()
                 .setTaskId(task.getTaskId())
-                .setExecutorId(Protos.ExecutorID.newBuilder().setValue(HDFSConstants.BACKUP_EXECUTOR_ID))
+                .setExecutorId(
+                    Protos.ExecutorID.newBuilder().setValue(HDFSConstants.BACKUP_EXECUTOR_ID))
                 .setState(Protos.TaskState.TASK_RUNNING).build());
         final Input input = new Input(task.getData().newInput());
         Trie<String, Event> fsEventTree = (Trie<String, Event>)kryo.readObject(input, Trie.class);
@@ -87,7 +92,8 @@ public class BackupExecutor implements Executor {
         }
         driver.sendStatusUpdate(Protos.TaskStatus.newBuilder()
                 .setTaskId(task.getTaskId())
-                .setExecutorId(Protos.ExecutorID.newBuilder().setValue(HDFSConstants.BACKUP_EXECUTOR_ID))
+                .setExecutorId(
+                    Protos.ExecutorID.newBuilder().setValue(HDFSConstants.BACKUP_EXECUTOR_ID))
                 .setState(taskState).build());
     }
 
@@ -96,7 +102,8 @@ public class BackupExecutor implements Executor {
         log.info("Kill signal from master");
         stopped = true;
         driver.sendStatusUpdate(Protos.TaskStatus.newBuilder()
-                .setExecutorId(Protos.ExecutorID.newBuilder().setValue(HDFSConstants.BACKUP_EXECUTOR_ID))
+                .setExecutorId(
+                    Protos.ExecutorID.newBuilder().setValue(HDFSConstants.BACKUP_EXECUTOR_ID))
                 .setTaskId(taskId)
                 .setState(Protos.TaskState.TASK_KILLED)
                 .build());
@@ -112,7 +119,8 @@ public class BackupExecutor implements Executor {
         log.info("Shutting down the framework");
         stopped = true;
         driver.sendStatusUpdate(Protos.TaskStatus.newBuilder()
-                .setExecutorId(Protos.ExecutorID.newBuilder().setValue(HDFSConstants.BACKUP_EXECUTOR_ID))
+                .setExecutorId(
+                    Protos.ExecutorID.newBuilder().setValue(HDFSConstants.BACKUP_EXECUTOR_ID))
                 .setState(Protos.TaskState.TASK_FINISHED).build());
     }
 
@@ -154,14 +162,15 @@ public class BackupExecutor implements Executor {
                 case CLOSE: {
                     Event.CloseEvent actualEvent = ((Event.CloseEvent) event);
                     final Path dfsPath = new Path(actualEvent.getPath());
-                    FileUtil.copy(srcDfs, dfsPath, dstDfs, dfsPath, false, true, new Configuration());
+                    FileUtil.copy(srcDfs, dfsPath, dstDfs, dfsPath, false, true,
+                        new Configuration());
 
                     break;
                 }
                 case CREATE: {
                     Event.CreateEvent actualEvent = ((Event.CreateEvent) event);
                     final Path dfsPath = new Path(actualEvent.getPath());
-                    if (actualEvent.getiNodeType() == Event.CreateEvent.INodeType.DIRECTORY) {
+                    if (actualEvent.getiNodeType() == INodeType.DIRECTORY) {
                         dstDfs.mkdirs(dfsPath);
                     } else {
                         FileUtil.copy(srcDfs, dfsPath, dstDfs, dfsPath, false, true, new Configuration());
